@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b2239">
+  <meta name="description" content="Pulso Cambiario Cambix: benchmark ejecutivo USD/PEN frente al mercado.">
+  <title>Pulso Cambiario · Cambix</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Ir al contenido</a>
+
+  <header class="topbar">
+    <div class="shell topbar__inner">
+      <div class="brand" aria-label="Pulso Cambiario Cambix">
+        <div class="brand__mark" aria-hidden="true"><span></span><span></span></div>
+        <div>
+          <strong>Pulso Cambiario</strong>
+          <small>Cambix · USD/PEN</small>
+        </div>
+      </div>
+
+      <nav class="topnav" aria-label="Secciones principales">
+        <button class="nav-btn is-active" data-view="pulse" aria-pressed="true">Pulso</button>
+        <button class="nav-btn" data-view="market" aria-pressed="false">Mercado</button>
+        <button class="nav-btn" data-view="history" aria-pressed="false">Evolución</button>
+      </nav>
+
+      <div class="topbar__actions">
+        <div class="data-status" id="dataStatus" aria-live="polite">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span>Cargando datos</span>
+        </div>
+        <button class="icon-btn" id="shareBtn" aria-label="Copiar enlace de esta vista" title="Copiar enlace">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a3 3 0 1 0-2.83-4A3 3 0 0 0 18 8ZM6 15a3 3 0 1 0 0 6 3 3 0 0 0 0-6Zm12 1a3 3 0 1 0 0 6 3 3 0 0 0 0-6ZM8.6 16.5l6.8-3.9m-6.8-5.1 6.8 3.9"/></svg>
+        </button>
+        <button class="present-btn" id="presentBtn">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H4zM9 20l3-4 3 4"/></svg>
+          <span>Presentar</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main" class="shell main-shell">
+    <div class="mobile-data-status" id="mobileDataStatus" aria-live="polite">
+      <span class="status-dot" aria-hidden="true"></span>
+      <span>Cargando datos</span>
+    </div>
+    <section class="freshness-banner" id="freshnessBanner" aria-live="polite" hidden>
+      <div class="freshness-banner__icon" aria-hidden="true">!</div>
+      <div><strong>Comparación con rezago</strong><span id="freshnessBannerText">—</span></div>
+    </section>
+    <section class="view is-active" data-view-panel="pulse" aria-labelledby="pulseTitle">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Situación actual</p>
+          <h1 id="pulseTitle">¿Dónde está Cambix frente al mercado?</h1>
+        </div>
+        <div class="timestamp-card">
+          <span>Última captura</span>
+          <strong id="latestCapture">—</strong>
+          <small id="captureMode">—</small>
+        </div>
+      </div>
+
+      <section class="hero-board" aria-label="Resumen de Cambix">
+        <div class="hero-rates">
+          <article class="hero-rate">
+            <div class="metric-label">Compra</div>
+            <div class="hero-number" id="buyValue">—</div>
+            <div class="rank-line"><strong id="buyRank">—</strong><span id="buyRankText">de 5</span></div>
+            <div class="signal" id="buySignal">—</div>
+          </article>
+          <div class="hero-divider" aria-hidden="true"></div>
+          <article class="hero-rate">
+            <div class="metric-label">Venta</div>
+            <div class="hero-number" id="sellValue">—</div>
+            <div class="rank-line"><strong id="sellRank">—</strong><span id="sellRankText">de 5</span></div>
+            <div class="signal" id="sellSignal">—</div>
+          </article>
+        </div>
+        <aside class="spread-panel">
+          <p>Spread Cambix</p>
+          <strong id="spreadValue">—</strong>
+          <span id="lastChangeText">Último cambio —</span>
+        </aside>
+      </section>
+
+      <section class="bands-grid" aria-label="Posición relativa de Cambix">
+        <article class="band-card">
+          <div class="card-head">
+            <div>
+              <p class="eyebrow">Banda competitiva</p>
+              <h2>Compra</h2>
+            </div>
+            <span class="mini-rank" id="buyMiniRank">—</span>
+          </div>
+          <div id="buyBand" class="competitive-band"></div>
+        </article>
+        <article class="band-card">
+          <div class="card-head">
+            <div>
+              <p class="eyebrow">Banda competitiva</p>
+              <h2>Venta</h2>
+            </div>
+            <span class="mini-rank" id="sellMiniRank">—</span>
+          </div>
+          <div id="sellBand" class="competitive-band"></div>
+        </article>
+      </section>
+
+      <section class="delta-grid" aria-label="Brechas competitivas">
+        <article class="delta-card" id="buyGapCard">
+          <p>Compra · vs promedio mercado</p>
+          <strong id="buyGapMoney">—</strong>
+          <span>por US$1,000</span>
+          <small id="buyGapRaw">—</small>
+          <div class="delta-state" id="buyGapState">—</div>
+        </article>
+        <article class="delta-card" id="sellGapCard">
+          <p>Venta · vs promedio mercado</p>
+          <strong id="sellGapMoney">—</strong>
+          <span>por US$1,000</span>
+          <small id="sellGapRaw">—</small>
+          <div class="delta-state" id="sellGapState">—</div>
+        </article>
+        <article class="delta-card delta-card--reference">
+          <p>Referencia SUNAT</p>
+          <div class="sunat-lines">
+            <div><span>Compra</span><strong id="sunatBuyGap">—</strong></div>
+            <div><span>Venta</span><strong id="sunatSellGap">—</strong></div>
+          </div>
+          <small id="sunatRates">—</small>
+          <div class="delta-state neutral">Referencia</div>
+        </article>
+      </section>
+
+      <section class="insight-panel" aria-labelledby="insightTitle">
+        <div class="insight-kicker"><span></span> Lectura ejecutiva</div>
+        <h2 id="insightTitle">Qué significa ahora</h2>
+        <p id="insightText">Cargando lectura del mercado…</p>
+      </section>
+
+      <section class="overview-grid">
+        <article class="chart-card">
+          <div class="card-head card-head--wrap">
+            <div>
+              <p class="eyebrow">Contexto</p>
+              <h2>Evolución últimas 24 horas</h2>
+            </div>
+            <div class="segmented" role="group" aria-label="Métrica del gráfico resumen">
+              <button class="segment is-active" data-overview-metric="buy" aria-pressed="true">Compra</button>
+              <button class="segment" data-overview-metric="sell" aria-pressed="false">Venta</button>
+            </div>
+          </div>
+          <div id="overviewChart" class="line-chart" role="img" aria-label="Evolución de tasas en las últimas 24 horas"></div>
+          <div id="overviewLegend" class="chart-legend"></div>
+        </article>
+
+        <article class="ranking-card">
+          <div class="card-head">
+            <div>
+              <p class="eyebrow">Fotografía actual</p>
+              <h2>Ranking</h2>
+            </div>
+            <button class="text-btn" data-go-view="market">Ver mercado</button>
+          </div>
+          <div class="ranking-columns">
+            <div><h3>Compra</h3><div id="buyRankingCompact"></div></div>
+            <div><h3>Venta</h3><div id="sellRankingCompact"></div></div>
+          </div>
+        </article>
+      </section>
+    </section>
+
+    <section class="view" data-view-panel="market" aria-labelledby="marketTitle" hidden>
+      <div class="section-head section-head--market">
+        <div>
+          <p class="eyebrow">Comparativo completo</p>
+          <h1 id="marketTitle">Mercado ahora</h1>
+          <p class="section-copy">Ordena las cinco casas digitales con la misma lógica que usa el benchmark: compra más alta y venta más baja son mejores para el cliente.</p>
+        </div>
+        <div class="segmented metric-toggle" role="group" aria-label="Métrica del ranking de mercado">
+          <button class="segment is-active" data-market-metric="buy" aria-pressed="true">Compra</button>
+          <button class="segment" data-market-metric="sell" aria-pressed="false">Venta</button>
+        </div>
+      </div>
+
+      <section class="market-layout">
+        <article class="market-ranking-card">
+          <div class="market-summary" id="marketSummary">—</div>
+          <div id="marketBars" class="market-bars"></div>
+        </article>
+
+        <aside class="market-side">
+          <article class="side-card">
+            <p class="eyebrow">Promedio competencia</p>
+            <strong id="marketAvgValue">—</strong>
+            <span id="marketAvgLabel">—</span>
+          </article>
+          <article class="side-card">
+            <p class="eyebrow">Mejor tasa</p>
+            <strong id="marketBestValue">—</strong>
+            <span id="marketBestProvider">—</span>
+          </article>
+          <article class="side-card">
+            <p class="eyebrow">Cambix</p>
+            <strong id="marketCambixValue">—</strong>
+            <span id="marketCambixRank">—</span>
+          </article>
+        </aside>
+      </section>
+
+      <section class="comparison-table-card" aria-labelledby="comparisonTitle">
+        <div class="card-head">
+          <div><p class="eyebrow">Detalle</p><h2 id="comparisonTitle">Comparativo de tasas</h2></div>
+        </div>
+        <div id="comparisonTable"></div>
+      </section>
+    </section>
+
+    <section class="view" data-view-panel="history" aria-labelledby="historyTitle" hidden>
+      <div class="section-head section-head--market">
+        <div>
+          <p class="eyebrow">Evolución</p>
+          <h1 id="historyTitle">Cómo se movió el mercado</h1>
+          <p class="section-copy">Visualiza cambios y no solo capturas. Cambix permanece destacado para facilitar la lectura frente al resto del mercado.</p>
+        </div>
+      </div>
+
+      <section class="history-toolbar" aria-label="Controles de evolución">
+        <div class="toolbar-group">
+          <span>Periodo</span>
+          <div class="segmented" role="group" aria-label="Periodo">
+            <button class="segment is-active" data-period="24" aria-pressed="true">24H</button>
+            <button class="segment" data-period="48" aria-pressed="false">48H</button>
+            <button class="segment" data-period="all" aria-pressed="false">Todo</button>
+          </div>
+        </div>
+        <div class="toolbar-group">
+          <span>Métrica</span>
+          <div class="segmented" role="group" aria-label="Métrica histórica">
+            <button class="segment is-active" data-history-metric="buy" aria-pressed="true">Compra</button>
+            <button class="segment" data-history-metric="sell" aria-pressed="false">Venta</button>
+          </div>
+        </div>
+      </section>
+
+      <article class="history-card">
+        <div id="historyChart" class="line-chart line-chart--large" role="img" aria-label="Serie histórica de tasas"></div>
+        <div id="historyLegend" class="chart-legend"></div>
+      </article>
+
+      <section class="history-notes">
+        <article><span class="note-number">01</span><div><strong>Última captura</strong><p id="historyLastCapture">—</p></div></article>
+        <article><span class="note-number">02</span><div><strong>Último cambio Cambix</strong><p id="historyLastChange">—</p></div></article>
+        <article><span class="note-number">03</span><div><strong>Cobertura</strong><p>5 casas digitales + SUNAT como referencia</p></div></article>
+      </section>
+    </section>
+  </main>
+
+  <nav class="mobile-nav" aria-label="Navegación móvil">
+    <button class="mobile-nav__btn is-active" data-view="pulse" aria-pressed="true">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h5l2-7 3 12 2-5h4"/></svg><span>Pulso</span>
+    </button>
+    <button class="mobile-nav__btn" data-view="market" aria-pressed="false">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18h4V9H4v9Zm6 0h4V5h-4v13Zm6 0h4v-6h-4v6Z"/></svg><span>Mercado</span>
+    </button>
+    <button class="mobile-nav__btn" data-view="history" aria-pressed="false">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17l5-5 4 3 7-8M4 5v14h16"/></svg><span>Evolución</span>
+    </button>
+  </nav>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <section class="presentation" id="presentation" hidden aria-label="Modo presentación">
+    <div class="presentation__chrome">
+      <div class="presentation__brand"><span class="presentation__dot"></span>Pulso Cambiario</div>
+      <div class="presentation__count" id="presentationCount">1 / 4</div>
+      <button class="presentation__exit" id="presentationExit">Salir <span aria-hidden="true">Esc</span></button>
+    </div>
+
+    <div class="slides" id="slides">
+      <article class="slide is-active" data-slide="0">
+        <p class="slide-kicker">Situación actual</p>
+        <h2>¿Dónde está Cambix ahora?</h2>
+        <div class="slide-dual">
+          <div><span>Compra</span><strong id="slideBuy">—</strong><b id="slideBuyRank">—</b><small id="slideBuyNext"></small></div>
+          <div><span>Venta</span><strong id="slideSell">—</strong><b id="slideSellRank">—</b><small id="slideSellNext"></small></div>
+        </div>
+        <p class="slide-foot" id="slideCapture">—</p>
+      </article>
+
+      <article class="slide" data-slide="1" hidden>
+        <p class="slide-kicker">Cambix vs mercado</p>
+        <h2>La brecha, convertida a soles</h2>
+        <div class="slide-dual slide-dual--gaps">
+          <div><span>Compra</span><strong id="slideBuyGap">—</strong><b id="slideBuyGapState">—</b></div>
+          <div><span>Venta</span><strong id="slideSellGap">—</strong><b id="slideSellGapState">—</b></div>
+        </div>
+        <p class="slide-foot">Impacto por cada US$1,000 frente al promedio de las otras cuatro casas digitales.</p>
+      </article>
+
+      <article class="slide" data-slide="2" hidden>
+        <p class="slide-kicker">Posición competitiva</p>
+        <h2>Quién lidera el mercado</h2>
+        <div class="slide-bands"><div id="slideBuyBand"></div><div id="slideSellBand"></div></div>
+      </article>
+
+      <article class="slide" data-slide="3" hidden>
+        <p class="slide-kicker">Evolución intradía</p>
+        <h2>Cómo llegamos a esta posición</h2>
+        <div id="slideChart" class="line-chart line-chart--presentation"></div>
+        <p class="slide-foot" id="slideInsight">—</p>
+      </article>
+    </div>
+
+    <button class="slide-nav slide-nav--prev" id="slidePrev" aria-label="Diapositiva anterior">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+    </button>
+    <button class="slide-nav slide-nav--next" id="slideNext" aria-label="Diapositiva siguiente">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+    </button>
+  </section>
+
+  <script src="config.js"></script>
+  <script src="data-fallback.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
