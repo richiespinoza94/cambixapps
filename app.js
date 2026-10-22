@@ -34,7 +34,7 @@
 
   const GATE_COPY = {
     checking:   { eyebrow:'Uso interno · BANCOM', title:'Pulso Cambiario', copy:'Revisando tu sesión…', note:'', google:null, other:false },
-    'signed-out': { eyebrow:'Uso interno · BANCOM', title:'Pulso Cambiario', copy:'Entra con tu correo @bancom.pe para ver cómo está Cambix frente al mercado.', note:'Solo usamos tu correo para confirmar el acceso.', google:'Continuar con Google', other:true },
+    'signed-out': { eyebrow:'Uso interno · BANCOM', title:'Pulso Cambiario', copy:'Entra con tu correo @bancom.pe para ver cómo está Cambix frente al mercado.', note:'Registramos quién entra y desde qué dispositivo, solo por seguridad de la información.', google:'Continuar con Google', other:true },
     expired:    { eyebrow:'Sesión vencida', title:'Vuelve a entrar', copy:'Tu sesión terminó. Entra de nuevo y seguimos con los datos de hoy.', note:'', google:'Continuar con Google', other:true },
     denied:     { eyebrow:'Sin acceso por ahora', title:'Esta cuenta no tiene acceso', copy:'', note:'Si crees que deberías entrar, escribe al equipo de Analítica de Negocios.', google:'Probar con otra cuenta', other:false },
     error:      { eyebrow:'Algo no conectó', title:'No pudimos abrir el tablero', copy:'Revisa tu conexión e inténtalo otra vez.', note:'', google:'Reintentar', other:false }
@@ -87,13 +87,27 @@
     lockApp('signed-out');
   }
 
+  function deviceInfo() {
+    const ua = navigator.userAgent || '';
+    const browser = /Edg\//.test(ua) ? 'Edge' : /OPR\/|Opera/.test(ua) ? 'Opera' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : 'Otro';
+    const os = /Windows/.test(ua) ? 'Windows' : /Android/.test(ua) ? 'Android' : /iPhone|iPad|iPod/.test(ua) ? 'iOS' : /Mac OS X/.test(ua) ? 'macOS' : /Linux/.test(ua) ? 'Linux' : 'Otro';
+    const type = /iPad|Tablet/.test(ua) ? 'tablet' : /Mobi|Android|iPhone/.test(ua) ? 'celular' : 'pc';
+    let tz = '';
+    try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { /* sin zona */ }
+    return { browser, os, type, screen: `${screen.width}x${screen.height}`, lang: navigator.language || '', tz };
+  }
+
   async function checkAllowed(token) {
     const cfg = window.CAMBIX_CONFIG || {};
-    const res = await fetch(`${cfg.supabaseUrl.replace(/\/$/,'')}/rest/v1/rpc/is_allowed_user`, {
-      method:'POST',
-      headers:{ apikey:cfg.supabasePublishableKey, Authorization:`Bearer ${token}`, 'Content-Type':'application/json' },
-      body:'{}'
-    });
+    const base = `${cfg.supabaseUrl.replace(/\/$/,'')}/rest/v1/rpc/`;
+    const headers = { apikey:cfg.supabasePublishableKey, Authorization:`Bearer ${token}`, 'Content-Type':'application/json' };
+    // Registra el acceso (quién, desde dónde) y devuelve si tiene permiso.
+    let res = await fetch(`${base}register_access`, { method:'POST', headers, body: JSON.stringify({ p_device: deviceInfo() }) });
+    if (res.status === 404) {
+      // Aún no se instaló el registro de accesos: verificamos permiso sin registrar.
+      console.warn('register_access no existe; usando is_allowed_user.');
+      res = await fetch(`${base}is_allowed_user`, { method:'POST', headers, body:'{}' });
+    }
     if (res.status === 401) throw new AuthError('expired');
     if (!res.ok) throw new Error(`Supabase ${res.status}`);
     return (await res.json()) === true;

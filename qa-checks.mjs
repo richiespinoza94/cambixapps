@@ -9,6 +9,7 @@ const app = read('app.js');
 const html = read('index.html');
 const css = read('styles.css');
 const sql = read('supabase_auth_lock.sql');
+const logSql = read('supabase_access_log.sql');
 
 // 1) Credenciales: nada privilegiado en el navegador.
 const frontend = [config, app, html].join('\n');
@@ -38,6 +39,13 @@ for (const token of ['is_allowed_user()', 'revoke all on table public.vw_rates_p
   if (!sql.includes(token)) fail(`supabase_auth_lock.sql no contiene: ${token}`);
 }
 if (/grant select on table public\.vw_rates_public to anon/.test(sql.replace(/^--.*$/gm, ''))) fail('El SQL activo no debe dar select a anon');
+
+// 4b) Registro de accesos: tabla cerrada, funcion con tope y vistas de revision cerradas.
+for (const token of ['create table if not exists public.access_log', 'enable row level security', 'revoke all on table public.access_log from anon, authenticated', 'register_access', 'x-forwarded-for', 'vw_access_flags', 'vw_access_recent', 'revoke all on table public.vw_access_recent, public.vw_access_flags from anon, authenticated']) {
+  if (!logSql.includes(token)) fail(`supabase_access_log.sql no contiene: ${token}`);
+}
+if (/grant\s+(select|all)[^;]*public\.access_log[^;]*\bto\b[^;]*\b(anon|authenticated)\b/i.test(logSql.replace(/^--.*$/gm, ''))) fail('access_log no debe darse a anon/authenticated');
+if (!app.includes('register_access') || !app.includes('deviceInfo')) fail('app.js no registra los accesos');
 
 // 5) Regresiones previas: frescura por proveedor, auto-refresh, estado mobile.
 for (const token of ['refreshMinutes', 'freshnessWarnMinutes', 'freshnessStaleMinutes']) {
