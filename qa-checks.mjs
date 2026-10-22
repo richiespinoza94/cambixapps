@@ -1,63 +1,54 @@
 import fs from 'node:fs';
-import vm from 'node:vm';
 
-const source = fs.readFileSync(new URL('./data-fallback.js', import.meta.url), 'utf8');
-const sandbox = { window: {} };
-vm.runInNewContext(source, sandbox);
-const rows = sandbox.window.CAMBIX_FALLBACK_RATES;
+const read = f => fs.readFileSync(new URL(`./${f}`, import.meta.url), 'utf8');
+const exists = f => fs.existsSync(new URL(`./${f}`, import.meta.url));
+const fail = msg => { throw new Error(msg); };
 
-const frontend = ['config.js','app.js','index.html'].map(f => fs.readFileSync(new URL(`./${f}`, import.meta.url), 'utf8')).join('\n');
-if (/sb_secret_/i.test(frontend)) throw new Error('Privileged sb_secret key found in frontend files');
-if (/service_role/i.test(frontend)) throw new Error('service_role reference found in frontend files');
-const providers = new Set(rows.map(r => r.provider));
+const config = read('config.js');
+const app = read('app.js');
+const html = read('index.html');
+const css = read('styles.css');
+const sql = read('supabase_auth_lock.sql');
 
-if (!rows.length) throw new Error('Fallback data is empty');
-if (providers.has('AVG_BANKS')) throw new Error('AVG_BANKS must never be exposed');
-if (providers.has('IBK')) throw new Error('IBK proxy must not be exposed in the MVP');
-for (const required of ['CAMBIX','REXTIE','TKAMBIO','TUCAMBISTA','KAMBISTA','SUNAT']) {
-  if (!providers.has(required)) throw new Error(`Missing provider ${required}`);
+// 1) Credenciales: nada privilegiado en el navegador.
+const frontend = [config, app, html].join('\n');
+if (/sb_secret_/i.test(frontend)) fail('Privileged sb_secret key found in frontend files');
+if (/service_role/i.test(frontend)) fail('service_role reference found in frontend files');
+
+// 2) Datos: ningun dato embebido que se pueda leer sin login.
+if (exists('data-fallback.js')) fail('data-fallback.js debe borrarse del repo: expone datos sin login');
+if (/data-fallback/i.test(html)) fail('index.html todavia referencia data-fallback.js');
+if (/CAMBIX_FALLBACK_RATES/.test(app)) fail('app.js todavia usa datos de respaldo embebidos');
+
+// 3) Acceso: pantalla de login y manejo de sesion.
+for (const id of ['gate', 'gateGoogle', 'gateOther', 'signOutBtn']) {
+  if (!html.includes(`id="${id}"`)) fail(`Falta #${id} en index.html`);
 }
-if (rows.some(r => !(r.buy > 0) || !(r.sell > 0))) throw new Error('Non-positive rates found');
-
-const latest = new Map();
-for (const r of rows) {
-  const dt = new Date(r.captured_at.replace(' ', 'T').replace(/([+-]\d{2})$/, '$1:00'));
-  const old = latest.get(r.provider);
-  if (!old || dt > old.dt) latest.set(r.provider, { ...r, dt });
+if (!html.includes('class="is-locked"')) fail('El body debe nacer bloqueado (is-locked)');
+if (!html.includes('vendor/supabase-js-')) fail('Falta supabase-js local en index.html');
+if (/cdn\.jsdelivr|unpkg|cdnjs/.test(html)) fail('No cargues scripts de CDN en la pagina de login');
+if (!/allowedDomain:\s*'bancom\.pe'/.test(config)) fail('config.js debe declarar allowedDomain bancom.pe');
+for (const token of ['signInWithOAuth', "provider:'google'", "flowType:'pkce'", 'is_allowed_user', "scope:'local'", 'Authorization: `Bearer ${token}`', 'AuthError']) {
+  if (!app.includes(token)) fail(`app.js no contiene: ${token}`);
 }
-const competitors = ['CAMBIX','REXTIE','TKAMBIO','TUCAMBISTA','KAMBISTA'].map(p => latest.get(p));
-const rank = (metric, asc) => {
-  const sorted = [...competitors].sort((a,b) => asc ? a[metric]-b[metric] : b[metric]-a[metric]);
-  const out = new Map(); let prev=null, current=0;
-  sorted.forEach((r,i)=>{ if (prev===null || r[metric]!==prev) current=i+1; out.set(r.provider,current); prev=r[metric]; });
-  return out;
-};
-const buyRank = rank('buy',false).get('CAMBIX');
-const sellRank = rank('sell',true).get('CAMBIX');
-if (buyRank !== 2) throw new Error(`Expected latest Cambix buy rank 2, got ${buyRank}`);
-if (sellRank !== 5) throw new Error(`Expected latest Cambix sell rank 5, got ${sellRank}`);
+if (!css.includes('.is-locked .main-shell')) fail('Faltan estilos que ocultan la app mientras esta bloqueada');
 
-console.log(`QA OK · ${rows.length} filas · Cambix compra #${buyRank} · venta #${sellRank}`);
+// 4) SQL: el candado cierra la lectura anonima.
+for (const token of ['is_allowed_user()', 'revoke all on table public.vw_rates_public from anon, authenticated', 'grant select on table public.vw_rates_public to authenticated', "bancom\\.pe", 'allowed_emails']) {
+  if (!sql.includes(token)) fail(`supabase_auth_lock.sql no contiene: ${token}`);
+}
+if (/grant select on table public\.vw_rates_public to anon/.test(sql.replace(/^--.*$/gm, ''))) fail('El SQL activo no debe dar select a anon');
 
-// P0 regression checks: freshness transparency + auto refresh + mobile live/fallback state.
-const configSource = fs.readFileSync(new URL('./config.js', import.meta.url), 'utf8');
-const appSource = fs.readFileSync(new URL('./app.js', import.meta.url), 'utf8');
-const htmlSource = fs.readFileSync(new URL('./index.html', import.meta.url), 'utf8');
-const cssSource = fs.readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
-
+// 5) Regresiones previas: frescura por proveedor, auto-refresh, estado mobile.
 for (const token of ['refreshMinutes', 'freshnessWarnMinutes', 'freshnessStaleMinutes']) {
-  if (!configSource.includes(token)) throw new Error(`Missing P0 config ${token}`);
+  if (!config.includes(token)) fail(`Missing config ${token}`);
 }
-if (!appSource.includes('setInterval') || !appSource.includes('visibilitychange')) throw new Error('Auto refresh hooks are missing');
-if (!appSource.includes('providerFreshness') || !appSource.includes('renderFreshness')) throw new Error('Provider freshness logic is missing');
-if (!htmlSource.includes('id="freshnessBanner"')) throw new Error('Freshness warning banner is missing');
-if (!htmlSource.includes('id="mobileDataStatus"')) throw new Error('Mobile data status is missing');
-if (!cssSource.includes('.mobile-data-status') || !cssSource.includes('.freshness-chip')) throw new Error('P0 responsive status styles are missing');
+if (!app.includes('setInterval') || !app.includes('visibilitychange')) fail('Auto refresh hooks are missing');
+if (!app.includes('providerFreshness') || !app.includes('renderFreshness')) fail('Provider freshness logic is missing');
+if (!html.includes('id="freshnessBanner"') || !html.includes('id="mobileDataStatus"')) fail('Banner de frescura o estado mobile faltan');
+if (!css.includes('.mobile-data-status') || !css.includes('.freshness-chip')) fail('Responsive status styles are missing');
 
-// Synthetic freshness boundary check: 45 minutes behind must be delayed; 75 must be stale.
-const classify = (minutes, warn=30, stale=60) => minutes > stale ? 'stale' : minutes > warn ? 'delayed' : 'fresh';
-if (classify(15) !== 'fresh') throw new Error('15m should be fresh');
-if (classify(45) !== 'delayed') throw new Error('45m should be delayed');
-if (classify(75) !== 'stale') throw new Error('75m should be stale');
+const classify = (minutes, warn = 30, stale = 60) => minutes > stale ? 'stale' : minutes > warn ? 'delayed' : 'fresh';
+if (classify(15) !== 'fresh' || classify(45) !== 'delayed' || classify(75) !== 'stale') fail('Freshness boundaries broken');
 
-console.log('P0 QA OK · frescura por proveedor · auto refresh · estado mobile live/fallback');
+console.log('QA OK · sin datos embebidos · login Google · candado SQL · frescura · auto refresh');

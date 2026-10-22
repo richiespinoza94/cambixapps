@@ -8,8 +8,26 @@
   <title>Pulso Cambiario · Cambix</title>
   <link rel="stylesheet" href="styles.css">
 </head>
-<body>
+<body class="is-locked">
   <a class="skip-link" href="#main">Ir al contenido</a>
+
+  <section class="gate" id="gate" aria-labelledby="gateTitle" aria-live="polite">
+    <div class="gate__card">
+      <div class="brand gate__brand" aria-hidden="true">
+        <div class="brand__mark"><span></span><span></span></div>
+        <div><strong>Pulso Cambiario</strong><small>Cambix · USD/PEN</small></div>
+      </div>
+      <p class="eyebrow" id="gateEyebrow">Uso interno · BANCOM</p>
+      <h1 id="gateTitle">Pulso Cambiario</h1>
+      <p class="gate__copy" id="gateCopy">Revisando tu sesión…</p>
+      <button class="gate__btn" id="gateGoogle" type="button" hidden>
+        <svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+        <span id="gateGoogleLabel">Continuar con Google</span>
+      </button>
+      <button class="gate__link" id="gateOther" type="button" hidden>Tengo otra cuenta autorizada</button>
+      <p class="gate__note" id="gateNote">Solo usamos tu correo para confirmar el acceso.</p>
+    </div>
+  </section>
 
   <header class="topbar">
     <div class="shell topbar__inner">
@@ -34,6 +52,9 @@
         </div>
         <button class="icon-btn" id="shareBtn" aria-label="Copiar enlace de esta vista" title="Copiar enlace">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a3 3 0 1 0-2.83-4A3 3 0 0 0 18 8ZM6 15a3 3 0 1 0 0 6 3 3 0 0 0 0-6Zm12 1a3 3 0 1 0 0 6 3 3 0 0 0 0-6ZM8.6 16.5l6.8-3.9m-6.8-5.1 6.8 3.9"/></svg>
+        </button>
+        <button class="icon-btn" id="signOutBtn" aria-label="Cerrar sesión" title="Cerrar sesión">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4H5v16h5M15 8l4 4-4 4M19 12H9"/></svg>
         </button>
         <button class="present-btn" id="presentBtn">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H4zM9 20l3-4 3 4"/></svg>
@@ -326,7 +347,7 @@
   </section>
 
   <script src="config.js"></script>
-  <script src="data-fallback.js"></script>
+  <script src="vendor/supabase-js-2.58.0.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

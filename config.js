@@ -7,5 +7,8 @@ window.CAMBIX_CONFIG = {
   liveDays: 7,
   refreshMinutes: 5,
   freshnessWarnMinutes: 30,
-  freshnessStaleMinutes: 60
+  freshnessStaleMinutes: 60,
+
+  // Acceso: solo es una pista visual para Google (hd). El candado real vive en Supabase.
+  allowedDomain: 'bancom.pe'
 };

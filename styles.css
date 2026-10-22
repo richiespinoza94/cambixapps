@@ -251,3 +251,20 @@ svg { stroke: currentColor; stroke-width: 1.8; fill: none; stroke-linecap: round
   .topbar,.mobile-nav,.present-btn,.icon-btn,.toast { display:none !important; }
   body { background:#fff; }.main-shell { padding: 10mm 0; }.view:not(.is-active) { display:none !important; }.hero-board { box-shadow:none; print-color-adjust:exact; -webkit-print-color-adjust:exact; }.band-card,.chart-card,.ranking-card,.delta-card,.insight-panel { break-inside:avoid; box-shadow:none; }
 }
+
+/* ---------- Acceso ---------- */
+.gate { display: none; min-height: 100vh; min-height: 100dvh; place-items: center; padding: 24px 16px; background: radial-gradient(1100px 520px at 12% -8%, rgba(12,107,111,.14), transparent 60%), var(--paper); }
+.is-locked .gate { display: grid; }
+.is-locked .topbar, .is-locked .main-shell, .is-locked .mobile-nav, .is-locked .presentation, .is-locked .skip-link { display: none !important; }
+.gate__card { width: min(100%, 440px); padding: 34px 30px 28px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow); text-align: left; }
+.gate__brand { margin-bottom: 30px; }
+.gate h1 { margin: 8px 0 0; font-size: clamp(26px, 6vw, 32px); line-height: 1.12; color: var(--ink); letter-spacing: -.02em; }
+.gate__copy { margin: 12px 0 24px; color: var(--ink-2); font-size: 15px; line-height: 1.55; overflow-wrap: anywhere; }
+.gate__btn { width: 100%; min-height: 50px; display: inline-flex; align-items: center; justify-content: center; gap: 12px; border: 1px solid var(--line-strong); border-radius: 14px; background: #fff; color: var(--ink); font: inherit; font-weight: 800; font-size: 15px; cursor: pointer; transition: .18s ease; }
+.gate__btn[hidden], .gate__link[hidden], .gate__note[hidden] { display: none; }
+.gate__btn svg { width: 20px; height: 20px; flex: none; }
+.gate__btn:hover { border-color: var(--brand); box-shadow: 0 8px 22px rgba(16,41,63,.09); transform: translateY(-1px); }
+.gate__link { display: block; margin: 14px auto 0; padding: 8px 10px; border: 0; background: none; color: var(--brand-dark); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.gate__note { margin: 20px 0 0; padding-top: 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; line-height: 1.5; }
+@media (prefers-reduced-motion: reduce) { .gate__btn { transition: none; } .gate__btn:hover { transform: none; } }
+@media (max-width: 639px) { #signOutBtn { display: inline-flex; } }

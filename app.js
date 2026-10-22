@@ -3,7 +3,7 @@
 
   const COMPETITORS = ['CAMBIX', 'REXTIE', 'TKAMBIO', 'TUCAMBISTA', 'KAMBISTA'];
   const COLORS = { CAMBIX:'#0c6b6f', REXTIE:'#6689a0', TKAMBIO:'#9b6f87', TUCAMBISTA:'#a37643', KAMBISTA:'#687d5a', SUNAT:'#8492a3' };
-  const state = { rows: [], dataMode: 'fallback', connectionState:'idle', refreshing:false, lastRefreshAt:0, refreshTimer:null, overviewMetric:'buy', marketMetric:'buy', historyMetric:'buy', period:'24', view:'pulse', slide:0 };
+  const state = { rows: [], dataMode: 'offline', connectionState:'idle', refreshing:false, lastRefreshAt:0, refreshTimer:null, overviewMetric:'buy', marketMetric:'buy', historyMetric:'buy', period:'24', view:'pulse', slide:0, session:null, gateMode:'checking', appOpen:false, bound:false, refreshBound:false };
   const $ = (id) => document.getElementById(id);
   const $$ = (sel, root=document) => [...root.querySelectorAll(sel)];
   const fmtRate = n => Number(n).toFixed(4);
@@ -13,17 +13,106 @@
   const formatPeru = d => { const parts = Object.fromEntries(new Intl.DateTimeFormat('es-PE', { timeZone:'America/Lima', day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit', hour12:false }).formatToParts(d).filter(p=>p.type!=='literal').map(p=>[p.type,p.value])); return `${parts.day} ${String(parts.month).replace('.', '').toUpperCase()} · ${parts.hour}:${parts.minute}`; };
   const escapeHtml = s => String(s).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 
+  // ---------- Acceso (Google vía Supabase Auth) ----------
+  class AuthError extends Error {}
+  let sb = null;
+
+  function authClient() {
+    if (sb) return sb;
+    const cfg = window.CAMBIX_CONFIG || {};
+    if (!window.supabase || !window.supabase.createClient) throw new Error('supabase-js no cargó');
+    sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabasePublishableKey, {
+      auth: { flowType:'pkce', persistSession:true, autoRefreshToken:true, detectSessionInUrl:true }
+    });
+    return sb;
+  }
+
+  async function accessToken() {
+    const { data } = await authClient().auth.getSession();
+    return data.session ? data.session.access_token : null;
+  }
+
+  const GATE_COPY = {
+    checking:   { eyebrow:'Uso interno · BANCOM', title:'Pulso Cambiario', copy:'Revisando tu sesión…', note:'', google:null, other:false },
+    'signed-out': { eyebrow:'Uso interno · BANCOM', title:'Pulso Cambiario', copy:'Entra con tu correo @bancom.pe para ver cómo está Cambix frente al mercado.', note:'Solo usamos tu correo para confirmar el acceso.', google:'Continuar con Google', other:true },
+    expired:    { eyebrow:'Sesión vencida', title:'Vuelve a entrar', copy:'Tu sesión terminó. Entra de nuevo y seguimos con los datos de hoy.', note:'', google:'Continuar con Google', other:true },
+    denied:     { eyebrow:'Sin acceso por ahora', title:'Esta cuenta no tiene acceso', copy:'', note:'Si crees que deberías entrar, escribe al equipo de Analítica de Negocios.', google:'Probar con otra cuenta', other:false },
+    error:      { eyebrow:'Algo no conectó', title:'No pudimos abrir el tablero', copy:'Revisa tu conexión e inténtalo otra vez.', note:'', google:'Reintentar', other:false }
+  };
+
+  function showGate(mode, detail = {}) {
+    const g = GATE_COPY[mode] || GATE_COPY.error;
+    state.gateMode = mode;
+    state.appOpen = false;
+    document.body.classList.add('is-locked');
+    $('gateEyebrow').textContent = g.eyebrow;
+    $('gateTitle').textContent = g.title;
+    $('gateCopy').textContent = mode === 'denied'
+      ? `${detail.email || 'Esta cuenta'} no es de @bancom.pe ni está en la lista de invitados. Prueba con tu correo del banco.`
+      : (detail.message || g.copy);
+    $('gateNote').textContent = g.note;
+    $('gateNote').hidden = !g.note;
+    $('gateGoogle').hidden = !g.google;
+    if (g.google) $('gateGoogleLabel').textContent = g.google;
+    $('gateOther').hidden = !g.other;
+  }
+
+  function lockApp(mode, detail) {
+    window.clearInterval(state.refreshTimer);
+    state.refreshTimer = null;
+    state.rows = [];
+    state.session = null;
+    if (!$('presentation').hidden) closePresentation();
+    showGate(mode, detail);
+  }
+
+  async function signIn(withDomainHint) {
+    const cfg = window.CAMBIX_CONFIG || {};
+    const queryParams = { prompt:'select_account' };
+    if (withDomainHint && cfg.allowedDomain) queryParams.hd = cfg.allowedDomain;
+    try {
+      const { error } = await authClient().auth.signInWithOAuth({
+        provider:'google',
+        options:{ redirectTo: location.origin + location.pathname, queryParams }
+      });
+      if (error) throw error;
+    } catch (err) {
+      console.warn('signIn failed', err);
+      showGate('error', { message:'No pudimos abrir el acceso con Google. Inténtalo de nuevo en unos segundos.' });
+    }
+  }
+
+  async function signOutLocal() {
+    try { await authClient().auth.signOut({ scope:'local' }); } catch (err) { console.warn(err); }
+    lockApp('signed-out');
+  }
+
+  async function checkAllowed(token) {
+    const cfg = window.CAMBIX_CONFIG || {};
+    const res = await fetch(`${cfg.supabaseUrl.replace(/\/$/,'')}/rest/v1/rpc/is_allowed_user`, {
+      method:'POST',
+      headers:{ apikey:cfg.supabasePublishableKey, Authorization:`Bearer ${token}`, 'Content-Type':'application/json' },
+      body:'{}'
+    });
+    if (res.status === 401) throw new AuthError('expired');
+    if (!res.ok) throw new Error(`Supabase ${res.status}`);
+    return (await res.json()) === true;
+  }
+
   async function loadRows({ allowFallback = true, quiet = false } = {}) {
     const cfg = window.CAMBIX_CONFIG || {};
     if (cfg.supabaseUrl && cfg.supabasePublishableKey) {
       try {
+        const token = await accessToken();
+        if (!token) throw new AuthError('no-session');
         const cutoff = new Date(Date.now() - (Number(cfg.liveDays || 7) * 864e5)).toISOString();
         const base = `${cfg.supabaseUrl.replace(/\/$/,'')}/rest/v1/${encodeURIComponent(cfg.liveView || 'vw_rates_public')}`;
         const pageSize = 1000;
         const rows = [];
         for (let offset = 0; ; offset += pageSize) {
           const url = `${base}?select=captured_at,provider,provider_type,buy,sell,spread&captured_at=gte.${encodeURIComponent(cutoff)}&order=captured_at.asc,provider.asc&limit=${pageSize}&offset=${offset}`;
-          const res = await fetch(url, { headers: { apikey: cfg.supabasePublishableKey } });
+          const res = await fetch(url, { headers: { apikey: cfg.supabasePublishableKey, Authorization: `Bearer ${token}` } });
+          if (res.status === 401 || res.status === 403) throw new AuthError(`Supabase ${res.status}`);
           if (!res.ok) throw new Error(`Supabase ${res.status}`);
           const page = await res.json();
           if (!Array.isArray(page)) throw new Error('Respuesta inválida de Supabase');
@@ -35,18 +124,19 @@
         state.connectionState = 'healthy';
         return rows.map(normalizeRow);
       } catch (err) {
+        if (err instanceof AuthError) throw err;
         console.warn('Live load failed.', err);
         if (!allowFallback && state.rows.length) {
           state.connectionState = 'degraded';
           if (!quiet) showToast('No se pudo actualizar; conservamos la última lectura en vivo.');
           return null;
         }
-        if (!quiet) showToast('Supabase no respondió; mostrando el último CSV disponible.');
+        if (!quiet) showToast('No pudimos cargar los datos en vivo.');
       }
     }
-    state.dataMode = 'fallback';
-    state.connectionState = 'fallback';
-    return (window.CAMBIX_FALLBACK_RATES || []).map(normalizeRow);
+    state.dataMode = 'offline';
+    state.connectionState = 'offline';
+    return [];
   }
 
   function normalizeRow(r) {
@@ -150,7 +240,7 @@
     $('buySignal').className=`signal ${bSig.cls}`; $('buySignal').textContent=bSig.text; $('sellSignal').className=`signal ${sSig.cls}`; $('sellSignal').textContent=sSig.text;
     $('buyMiniRank').textContent=`#${buyRank} de ${total}`; $('sellMiniRank').textContent=`#${sellRank} de ${total}`;
     $('latestCapture').textContent=formatPeru(m.lastCapture);
-    $('captureMode').textContent=state.dataMode==='live'?(state.connectionState==='healthy'?'Supabase · lectura en vivo':'Supabase · última lectura disponible'):'CSV de respaldo';
+    $('captureMode').textContent=state.dataMode==='live'?(state.connectionState==='healthy'?'Supabase · lectura en vivo':'Supabase · última lectura disponible'):'Sin conexión';
     $('lastChangeText').textContent=`Último cambio ${formatPeru(m.lastCambixChange)}`;
     renderFreshness(m);
 
@@ -182,8 +272,8 @@
 
   function updateDataStatus(m) {
     const ageMinutes = Math.max(0, Math.floor((Date.now() - m.lastCapture.getTime()) / 60000));
-    let mode = 'fallback';
-    let label = `Respaldo CSV · ${formatPeru(m.lastCapture)}`;
+    let mode = 'offline';
+    let label = `Sin conexión · ${formatPeru(m.lastCapture)}`;
     if (state.dataMode === 'live') {
       if (state.connectionState === 'degraded') {
         mode = 'degraded';
@@ -338,6 +428,9 @@
   }
 
   function bind() {
+    if (state.bound) return;
+    state.bound = true;
+    $('signOutBtn').addEventListener('click', signOutLocal);
     $$('[data-view]').forEach(b=>b.addEventListener('click',()=>setView(b.dataset.view)));
     $$('[data-go-view]').forEach(b=>b.addEventListener('click',()=>setView(b.dataset.goView)));
     $$('[data-overview-metric]').forEach(b=>b.addEventListener('click',()=>{state.overviewMetric=b.dataset.overviewMetric;setPressed('[data-overview-metric]',b);renderPulse(metrics(state.rows));}));
@@ -357,6 +450,8 @@
       state.lastRefreshAt = Date.now();
       if (rows?.length) state.rows = rows;
       if (state.rows.length) renderAll();
+    } catch (err) {
+      if (err instanceof AuthError) lockApp('expired'); else console.warn(err);
     } finally {
       state.refreshing = false;
     }
@@ -365,27 +460,65 @@
   function startAutoRefresh() {
     const cfg = window.CAMBIX_CONFIG || {};
     const intervalMs = Math.max(1, Number(cfg.refreshMinutes || 5)) * 60000;
+    window.clearInterval(state.refreshTimer);
     state.refreshTimer = window.setInterval(() => {
-      if (!document.hidden) refreshData({ quiet:true, allowFallback:false });
+      if (!document.hidden && state.appOpen) refreshData({ quiet:true, allowFallback:false });
     }, intervalMs);
+    if (state.refreshBound) return;
+    state.refreshBound = true;
     document.addEventListener('visibilitychange', () => {
-      if (!document.hidden && Date.now() - state.lastRefreshAt > 60000) refreshData({ quiet:true, allowFallback:false });
+      if (!document.hidden && state.appOpen && Date.now() - state.lastRefreshAt > 60000) refreshData({ quiet:true, allowFallback:false });
     });
   }
 
-  async function init() {
-    const rows = await loadRows({ allowFallback:true, quiet:false });
+  async function enterApp(session) {
+    state.session = session;
+    let allowed;
+    try { allowed = await checkAllowed(session.access_token); }
+    catch (err) {
+      if (err instanceof AuthError) return lockApp('expired');
+      console.warn(err);
+      return showGate('error', { message:'No pudimos verificar tu acceso. Revisa tu conexión e inténtalo otra vez.' });
+    }
+    if (!allowed) return showGate('denied', { email: session.user && session.user.email });
+
+    let rows;
+    try { rows = await loadRows({ allowFallback:true, quiet:false }); }
+    catch (err) { return lockApp(err instanceof AuthError ? 'expired' : 'error'); }
     state.rows = rows || [];
     state.lastRefreshAt = Date.now();
     if (!state.rows.length) {
-      $('dataStatus').innerHTML='<span class="status-dot"></span><span>Sin datos</span>';
-      $('mobileDataStatus').innerHTML='<span class="status-dot"></span><span>Sin datos</span>';
-      return;
+      return showGate('error', { message:'Entraste bien, pero no llegaron datos todavía. Inténtalo en unos minutos.' });
     }
+    const email = session.user && session.user.email;
+    if (email) { $('signOutBtn').title = `Cerrar sesión (${email})`; $('signOutBtn').setAttribute('aria-label', `Cerrar sesión de ${email}`); }
+    state.appOpen = true;
+    document.body.classList.remove('is-locked');
     renderAll();
     bind();
     const requested=new URL(location.href).searchParams.get('view'); if (['pulse','market','history'].includes(requested)) setView(requested,false);
     startAutoRefresh();
+  }
+
+  async function init() {
+    $('gateGoogle').addEventListener('click', () => {
+      if (state.gateMode === 'denied') { signOutLocal(); return; }
+      if (state.gateMode === 'error') { location.reload(); return; }
+      signIn(true);
+    });
+    $('gateOther').addEventListener('click', () => signIn(false));
+    showGate('checking');
+    let session = null;
+    try {
+      const client = authClient();
+      client.auth.onAuthStateChange(event => { if (event === 'SIGNED_OUT' && state.appOpen) lockApp('signed-out'); });
+      session = (await client.auth.getSession()).data.session;
+    } catch (err) {
+      console.warn(err);
+      return showGate('error', { message:'No pudimos iniciar el acceso. Recarga la página.' });
+    }
+    if (!session) return showGate('signed-out');
+    await enterApp(session);
   }
 
   init();
